@@ -120,8 +120,8 @@ class Monad m => MemoryMelloable h m where
 -- 'fail' is used whenever the 'BS.ByteString' is too short to perform the
 -- requested read operations.
 instance MonadFail m => MemoryMelloable BS.ByteString m where
-  peek bs idx = maybe (fail "Out of range") return $
-    bs `BS.indexMaybe` (fromIntegral idx)
+  peek bs idx | (fromIntegral idx) >= BS.length bs = fail "Out of range"
+              | otherwise = return $ bs `BS.index` (fromIntegral idx)
 
   poke _ _ _ = error
     "Poke operations not implemented on referentially-transparent ByteStrings!"
