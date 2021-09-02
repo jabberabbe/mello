@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {- |
 Copyright: (c) 2021 Tito Sacchi
 SPDX-License-Identifier: GPL-3.0-only
@@ -7,8 +9,9 @@ Haskell memory inspection, debugging and tracing library
 -}
 
 module Mello
-       ( someFunc
+       ( -- * Library re-exports
+         module Mello.Memory
        ) where
 
-someFunc :: IO ()
-someFunc = putStrLn ("someFunc" :: String)
+import Mello.Memory
+

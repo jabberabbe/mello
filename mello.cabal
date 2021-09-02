@@ -14,6 +14,7 @@ tested-with:         GHC == { 8.8.4, 8.10.5, 9.0.1 }
 
 common common-options
   build-depends:       base >= 4.13.0.0 && < 5
+                     , bytestring >= 0.11
 
   ghc-options:         -Wall
                        -Wcompat
@@ -36,3 +37,4 @@ library
   import:              common-options
   hs-source-dirs:      src
   exposed-modules:     Mello
+                     , Mello.Memory
