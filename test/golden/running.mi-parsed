@@ -1,0 +1,22 @@
+Just
+    [ Result
+        ( ResultRecord
+            { resultToken = Nothing
+            , resultClass = Done
+            , resultResults = fromList []
+            }
+        )
+    , Async
+        ( AsyncRecord
+            { asyncToken = Nothing
+            , asyncType = Exec
+            , asyncClass = "running"
+            , asyncResults = fromList
+                [
+                    ( "thread-id"
+                    , String "all"
+                    )
+                ]
+            }
+        )
+    ]

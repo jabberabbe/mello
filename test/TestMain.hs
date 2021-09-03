@@ -1,12 +1,11 @@
-import Mello
+import           Test.Tasty
 
-import Test.Tasty
-import Test.Tasty.HUnit
+import           GdbTests
 
-main = defaultMain tests
+main = defaultMain =<< tests
 
-tests :: TestTree
-tests = testGroup "Tests"
-  [ testCase "Fake" $ True @?= True
+tests :: IO TestTree
+tests = testGroup "Tests" <$> sequenceA
+  [ gdbTests
   ]
 

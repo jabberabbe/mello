@@ -10,11 +10,17 @@ maintainer:          Tito Sacchi <tito.sakki@gmail.com>
 copyright:           2021 Tito Sacchi
 build-type:          Simple
 extra-doc-files:     README.md
+extra-source-files:  test/golden/*.mi-output
+                   , test/golden/*.mi-parsed
+                   , stack.yaml
 tested-with:         GHC == { 8.8.4, 8.10.5, 9.0.1 }
 
 common common-options
   build-depends:       base >= 4.13.0.0 && < 5
                      , bytestring >= 0.10
+                     , megaparsec >= 9
+                     , text
+                     , unordered-containers
 
   ghc-options:         -Wall
                        -Wcompat
@@ -38,6 +44,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     Mello
                      , Mello.Memory
+                     , Mello.GdbMI
 
 test-suite mello-tests
   import:              common-options
@@ -45,6 +52,11 @@ test-suite mello-tests
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             TestMain.hs
+  other-modules:       GdbTests
   build-depends:       mello
                      , tasty >= 1.4
+                     , tasty-golden
                      , tasty-hunit >= 0.10
+                     , filepath
+                     , pretty-simple == 4.0.0.0
+                     , text

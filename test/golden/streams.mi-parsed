@@ -1,0 +1,43 @@
+Just
+    [ Stream
+        ( StreamRecord Console "GNU gdb (GDB) 10.2
+        " )
+    , Stream
+        ( StreamRecord Console "Copyright (C) 2021 Free Software Foundation, Inc.
+        " )
+    , Stream
+        ( StreamRecord Console "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+        This is free software: you are free to change and redistribute it.
+        There is NO WARRANTY, to the extent permitted by law." )
+    , Stream
+        ( StreamRecord Console "
+        Type "show copying" and "show warranty" for details.
+        " )
+    , Stream
+        ( StreamRecord Console "This GDB was configured as "x86_64-pc-linux-gnu".
+        " )
+    , Stream
+        ( StreamRecord Console "Type "show configuration" for configuration details.
+        " )
+    , Stream
+        ( StreamRecord Console "For bug reporting instructions, please see:
+        " )
+    , Stream
+        ( StreamRecord Console "<https://www.gnu.org/software/gdb/bugs/>.
+        " )
+    , Stream
+        ( StreamRecord Console "Find the GDB manual and other documentation resources online at:
+            <http://www.gnu.org/software/gdb/documentation/>." )
+    , Stream
+        ( StreamRecord Console "Breakpoint 1, read () at ../sysdeps/unix/syscall-template.S:84
+        " )
+    , Stream
+        ( StreamRecord Log "84\x9../sysdeps/unix/syscall-template.S: No such file or directory.
+        " )
+    , Stream
+        ( StreamRecord Console "\x1b[31m\x1b[1mpwndbg: \x1b[0m\x1b[31m\x1b[0m\x1b[91mloaded 189 commands. Type \x1b[35mpwndbg [filter]\x1b[0m\x1b[91m for a list.\x1b[0m
+        " )
+    , Stream
+        ( StreamRecord Console "\x1b[31m\x1b[1mpwndbg: \x1b[0m\x1b[31m\x1b[0m\x1b[91mcreated \x1b[35m$rebase\x1b[0m\x1b[91m, \x1b[35m$ida\x1b[0m\x1b[91m gdb functions (can be used with print/break)\x1b[0m
+        " )
+    ]

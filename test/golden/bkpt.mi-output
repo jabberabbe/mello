@@ -1,0 +1,3 @@
+=breakpoint-modified,bkpt={number="1",type="breakpoint",disp="keep",enabled="y",addr="0x00007f23366e0350",file="../sysdeps/unix/syscall-template.S",fullname="/build/glibc-S7Ft5T/glibc-2.23/io/../sysdeps/unix/syscall-template.S",line="84",thread-groups=["i1"],times="8",original-location="read"}
+*stopped,reason="breakpoint-hit",disp="keep",bkptno="1",frame={addr="0x00007f23366e0350",func="read",args=[],file="../sysdeps/unix/syscall-template.S",fullname="/build/glibc-S7Ft5T/glibc-2.23/io/../sysdeps/unix/syscall-template.S",line="84",arch="i386:x86-64"},thread-id="1",stopped-threads="all",core="0"
+(gdb) 

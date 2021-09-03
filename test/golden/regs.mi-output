@@ -1,0 +1,2 @@
+^done,register-values=[{number="1",value="0x0"},{number="2",value="0x7f23366e0360"},{number="3",value="0x4"},{number="4",value="0x7fff0baea8e0"},{number="5",value="0x0"},{number="6",value="0x7fff0baea8f0"},{number="7",value="0x7fff0baea8d8"},{number="8",value="0x7f2336bd4700"},{number="9",value="0x3"},{number="10",value="0x0"},{number="11",value="0x246"},{number="12",value="0x400750"},{number="13",value="0x7fff0baea9d0"},{number="14",value="0x0"},{number="15",value="0x0"},{number="16",value="0x7f23366e0360"}]
+(gdb) 
