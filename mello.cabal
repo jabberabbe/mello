@@ -38,3 +38,13 @@ library
   hs-source-dirs:      src
   exposed-modules:     Mello
                      , Mello.Memory
+
+test-suite mello-tests
+  import:              common-options
+  ghc-options:         -threaded
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             TestMain.hs
+  build-depends:       mello
+                     , tasty >= 1.4
+                     , tasty-hunit >= 0.10
