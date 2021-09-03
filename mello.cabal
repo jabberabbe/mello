@@ -58,5 +58,4 @@ test-suite mello-tests
                      , tasty-golden
                      , tasty-hunit >= 0.10
                      , filepath
-                     , pretty-simple == 4.0.0.0
                      , text

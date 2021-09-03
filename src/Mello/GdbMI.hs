@@ -1,5 +1,6 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE TupleSections      #-}
 {- |
 Copyright: (c) 2021 Tito Sacchi
 SPDX-License-Identifier: GPL-3.0-only
@@ -39,34 +40,34 @@ data Value =
     String Text
   | Tuple (HashMap Text Value)
   | List [(Maybe Text, Value)]
-  deriving (Show)
+  deriving stock (Show)
 
 data ResultClass =
     Done
   | Connected
   | Error
   | Exit
-  deriving (Show)
+  deriving stock (Show)
 
 data ResultRecord = ResultRecord
   {
     resultToken   :: Maybe Int,
     resultClass   :: ResultClass,
     resultResults :: HashMap Text Value
-  } deriving (Show)
+  } deriving stock (Show)
 
-data StreamRecord = StreamRecord StreamType Text deriving (Show)
+data StreamRecord = StreamRecord StreamType Text deriving stock (Show)
 data StreamType =
     Console
   | Target
   | Log
-  deriving (Show)
+  deriving stock (Show)
 
 data AsyncType =
     Status
   | Exec
   | Notify
-  deriving (Show)
+  deriving stock (Show)
 
 data AsyncRecord = AsyncRecord
   {
@@ -74,13 +75,13 @@ data AsyncRecord = AsyncRecord
     asyncType    :: AsyncType,
     asyncClass   :: Text,
     asyncResults :: HashMap Text Value
-  } deriving (Show)
+  } deriving stock (Show)
 
 data MIMessage =
     Result ResultRecord
   | Async AsyncRecord
   | Stream StreamRecord
-  deriving (Show)
+  deriving stock (Show)
 
 parseGdbOutput :: Text -> Maybe [MIMessage]
 parseGdbOutput = parseMaybe parseMIMessages
