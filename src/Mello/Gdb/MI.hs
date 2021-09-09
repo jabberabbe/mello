@@ -42,28 +42,28 @@ data Value =
     String Text
   | Tuple (HashMap Text Value)
   | List [(Maybe Text, Value)]
-  deriving stock (Show)
+  deriving stock (Show, Eq)
 
 data ResultClass =
     Done
   | Connected
   | Error
   | Exit
-  deriving stock (Show)
+  deriving stock (Show, Eq)
 
 data ResultRecord = ResultRecord
   {
     resultToken   :: Maybe Int,
     resultClass   :: ResultClass,
     resultResults :: HashMap Text Value
-  } deriving stock (Show)
+  } deriving stock (Show, Eq)
 
-data StreamRecord = StreamRecord StreamType Text deriving stock (Show)
+data StreamRecord = StreamRecord StreamType Text deriving stock (Show, Eq)
 data StreamType =
     Console
   | Target
   | Log
-  deriving stock (Show)
+  deriving stock (Show, Eq)
 
 data AsyncType =
     Status
@@ -77,13 +77,13 @@ data AsyncRecord = AsyncRecord
     asyncType    :: AsyncType,
     asyncClass   :: Text,
     asyncResults :: HashMap Text Value
-  } deriving stock (Show)
+  } deriving stock (Show, Eq)
 
 data MIMessage =
     Result ResultRecord
   | Async AsyncRecord
   | Stream StreamRecord
-  deriving stock (Show)
+  deriving stock (Show, Eq)
 
 parseGdbOutput :: Text -> Maybe [MIMessage]
 parseGdbOutput = parseMaybe parseMIMessages

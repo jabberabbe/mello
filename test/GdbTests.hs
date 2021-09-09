@@ -9,7 +9,7 @@ import           Test.Tasty.Golden.Advanced
 import qualified Data.Text.IO               as T
 import           System.FilePath
 
-import           Mello.GdbMI
+import           Mello.Gdb.MI
 
 -- These orphan instances are only used in golden tests
 deriving instance Read MIMessage
@@ -20,14 +20,6 @@ deriving instance Read AsyncRecord
 deriving instance Read AsyncType
 deriving instance Read StreamRecord
 deriving instance Read StreamType
-deriving instance Eq MIMessage
-deriving instance Eq Value
-deriving instance Eq ResultRecord
-deriving instance Eq ResultClass
-deriving instance Eq AsyncRecord
-deriving instance Eq AsyncType
-deriving instance Eq StreamRecord
-deriving instance Eq StreamType
 
 gdbTests :: IO TestTree
 gdbTests = testGroup "GDB" <$> sequenceA
