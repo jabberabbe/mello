@@ -20,7 +20,10 @@ common common-options
                      , bytestring >= 0.10
                      , megaparsec >= 9
                      , text
+                     , unix
+                     , process
                      , unordered-containers
+                     , containers
 
   ghc-options:         -Wall
                        -Wcompat
@@ -44,7 +47,8 @@ library
   hs-source-dirs:      src
   exposed-modules:     Mello
                      , Mello.Memory
-                     , Mello.GdbMI
+                     , Mello.Gdb.MI
+                     , Mello.Gdb.Session
 
 test-suite mello-tests
   import:              common-options

@@ -11,9 +11,10 @@ The complete specification can be found in the GDB manual, section 27.2.2:
 https:\/\/sourceware.org\/gdb\/current\/onlinedocs\/gdb\/GDB_002fMI-Output-Syntax.html
 -}
 
-module Mello.GdbMI
+module Mello.Gdb.MI
        ( MIMessage(..)
        , parseGdbOutput
+       , parseGdbOutputLine
        , Value(..)
        , ResultRecord(..)
        , ResultClass(..)
@@ -25,6 +26,7 @@ module Mello.GdbMI
 
 import           Control.Applicative        hiding (many, some)
 
+import           Control.Arrow              (left)
 import           Data.Char
 import           Data.HashMap.Strict        as HM
 import           Data.Text                  as T
@@ -67,7 +69,7 @@ data AsyncType =
     Status
   | Exec
   | Notify
-  deriving stock (Show)
+  deriving stock (Show, Eq)
 
 data AsyncRecord = AsyncRecord
   {
@@ -86,9 +88,14 @@ data MIMessage =
 parseGdbOutput :: Text -> Maybe [MIMessage]
 parseGdbOutput = parseMaybe parseMIMessages
 
+parseGdbOutputLine :: Text -> Either String (Maybe MIMessage)
+parseGdbOutputLine = left errorBundlePretty . parse
+   (pure Nothing <* string "(gdb)" <* optional (char ' ')
+  <|> Just <$> parseMIMessage) ""
+
 parseMIMessages :: Parser [MIMessage]
-parseMIMessages = many parseMIMessage
-  <* string "(gdb)" <* optional (char ' ') <* newline
+parseMIMessages = many (parseMIMessage <* eol)
+  <* string "(gdb)" <* optional (char ' ') <* eol
 
 parseMIMessage :: Parser MIMessage
 parseMIMessage = choice
@@ -113,7 +120,6 @@ parseResultRecord = ResultRecord
   <$> try (optional L.decimal <* char '^')
   <*> parseResultClass
   <*> ((char ',' *> parseAttrs) <|> pure HM.empty)
-  <*  newline
 
 parseAsyncRecord :: Parser AsyncRecord
 parseAsyncRecord = AsyncRecord
@@ -122,14 +128,12 @@ parseAsyncRecord = AsyncRecord
     [char '*' *> pure Exec, char '+' *> pure Status, char '=' *> pure Notify]
   <*> parseIdent
   <*> ((char ',' *> parseAttrs) <|> pure HM.empty)
-  <* newline
 
 parseStreamRecord :: Parser StreamRecord
 parseStreamRecord = StreamRecord
   <$> choice
     [char '~' *> pure Console, char '@' *> pure Target, char '&' *> pure Log]
   <*> parseString
-  <* newline
 
 parseAttrs :: Parser (HashMap Text Value)
 parseAttrs = fromList <$> parseTupleField `sepBy` (char ',')
