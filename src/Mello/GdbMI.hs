@@ -8,7 +8,7 @@ Maintainer: Tito Sacchi <tito.sakki@gmail.com>
 
 GDB/MI (machine interface) output protocol parser.
 The complete specification can be found in the GDB manual, section 27.2.2:
-https://sourceware.org/gdb/current/onlinedocs/gdb/GDB_002fMI-Output-Syntax.html
+https:\/\/sourceware.org\/gdb\/current\/onlinedocs\/gdb\/GDB_002fMI-Output-Syntax.html
 -}
 
 module Mello.GdbMI
@@ -92,8 +92,8 @@ parseMIMessages = many parseMIMessage
 
 parseMIMessage :: Parser MIMessage
 parseMIMessage = choice
-  [ Async  <$> parseAsyncRecord
-  , Result <$> parseResultRecord
+  [ Result <$> parseResultRecord
+  , Async  <$> parseAsyncRecord
   , Stream <$> parseStreamRecord
   ]
 
@@ -110,7 +110,7 @@ parseResultClass = choice
 
 parseResultRecord :: Parser ResultRecord
 parseResultRecord = ResultRecord
-  <$> (optional L.decimal <* char '^')
+  <$> try (optional L.decimal <* char '^')
   <*> parseResultClass
   <*> ((char ',' *> parseAttrs) <|> pure HM.empty)
   <*  newline

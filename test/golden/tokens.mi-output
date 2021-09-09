@@ -1,0 +1,5 @@
+1^done,test-result-token1=[{test-field="test-val",test-field2="test-val2"}]
+2*running,test-async-exec-token2=[{test-field="test-val",test-field2="test-val2"}]
+3=some-notify,test-async-notify-token2=[{test-field="test-val",test-field2="test-val2"}]
+4+some-status,test-async-status-token4=[{test-field="test-val",test-field2="test-val2"}]
+(gdb) 
