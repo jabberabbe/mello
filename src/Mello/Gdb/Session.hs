@@ -155,7 +155,7 @@ spawnGdb config@GdbConfig{..} = do
 
       Nothing -> do
         (writeHandle, readHandle, _, processHandle) <- createProcess $
-            (proc (fromMaybe "gdb" gdbPath) args) {
+            (proc (fromMaybe "gdb" gdbPath) (["-interpreter", "mi2"] ++ args)) {
                 std_in = CreatePipe,
                 std_out = CreatePipe,
                 std_err = NoStream,
@@ -174,13 +174,13 @@ spawnGdb config@GdbConfig{..} = do
   where
     manage pendingCommands asyncExecCallback asyncNotifyCallbacks readHandle =
       forever $ do
-        message <- parseGdbOutputLine <$> T.hGetLine readHandle
-        case message of
+        gdbLine <- T.hGetLine readHandle
+        case (parseGdbOutputLine gdbLine) of
           -- Parsing failed
           Left errorMsg -> error errorMsg
 
           -- If the result has no token, don't do anything with it
-          Right (Just (Result result@ResultRecord{..}) )| Just token <- resultToken -> do
+          Right (Just (Result result@ResultRecord{..})) | Just token <- resultToken -> do
             -- Atomically get and remove the MVar from the queue
             waitingMVar <- atomicModifyIORef' pendingCommands $
                 (,) <$> IM.delete token <*> IM.lookup token
@@ -214,6 +214,7 @@ sendCommandAsync command gdb = do
     -- Send the command (token + command line) on the write end of the pipe
     hPutStr (writeHandle gdb) (show token)
     T.hPutStrLn (writeHandle gdb) command
+    hFlush (writeHandle gdb)
     return mvar
 
 -- | Send a MI command to the GDB session and wait for its result.
