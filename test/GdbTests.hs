@@ -14,7 +14,10 @@ import           Test.Tasty.Golden.Advanced
 import           Test.Tasty.HUnit
 
 import           Control.Applicative
+import           Control.Concurrent.MVar
+import           Control.Exception
 import           Control.Monad
+import           Data.Either
 import           Data.HashMap.Strict        as HM
 import           Data.Maybe
 import           Data.Text
@@ -91,6 +94,7 @@ gdbInteractionTests = testGroup "GDB interaction tests"
 
     tests = pure $
         [ parseMainAddress
+        , asyncBkptAdd
         ]
 
 -- Test whether we can successfully retrieve the address for a symbol.  We need
@@ -105,12 +109,13 @@ parseMainAddress = testCase "parse_main_address" $ do
     symbols <- sendCommand "-symbol-info-functions --include-nondebug --name main" gdb
     main <- sendCommand "-data-evaluate-expression (long)(&main)" gdb
 
-    symbols <- case (HM.lookup "symbols" $ resultResults symbols) of
-        Just (Tuple x) -> pure x
-        _              -> assertFailure "no symbols field"
-    nondebug <- case (HM.lookup "nondebug" symbols) of
-        Just (List x) -> pure x
-        _             -> assertFailure "no nondebug field"
+    nondebug <- case (
+        HM.lookup "symbols" >=> valueToTuple >=>
+        HM.lookup "nondebug" >=> valueToList
+        $ resultResults symbols
+      ) of
+        Just x -> pure x
+        _      -> assertFailure "no symbols>nondebug field"
     let (String hexMainAddress):[] = catMaybes
             [ HM.lookup "address" hm |
             (_, Tuple hm) <- nondebug,
@@ -118,11 +123,36 @@ parseMainAddress = testCase "parse_main_address" $ do
     mainAddress1 <- case (hexadecimal hexMainAddress) of
         Left err     -> assertFailure $ "unable to parse hex address: " ++ err
         Right (x, _) -> pure x
-    decMainAddress <- case (HM.lookup "value" $ resultResults main) of
-        Just (String x) -> pure x
-        _               -> assertFailure "no value returned"
+    decMainAddress <- case (HM.lookup "value" >=> valueToString $ resultResults main) of
+        Just x -> pure x
+        _      -> assertFailure "no value returned"
     mainAddress2 <- case (decimal decMainAddress) of
         Left err     -> assertFailure $ "unable to parse value of (long)(&main): " ++ err
         Right (x, _) -> pure x
     mainAddress2 @?= mainAddress1
+
+asyncBkptAdd :: TestTree
+asyncBkptAdd = testCase "async_bkpt_add" $ do
+    myPath <- getExecutablePath
+    let config = GdbConfig Nothing Nothing [myPath] []
+    -- let config = GdbConfig Nothing (Just ("tmux", ["splitw", "-h"])) [myPath] []
+    gdb <- spawnGdb config
+    mvar <- (newEmptyMVar :: IO (MVar (Either SomeException Word)))
+    void $ flip (registerAsyncNotifyHandler "breakpoint-created") gdb $
+      \record -> putMVar mvar <=< try $ do
+        mainAddr <- case (
+            HM.lookup "bkpt" >=> valueToTuple >=>
+            HM.lookup "addr" >=> valueToString $
+            asyncResults record
+          ) of
+            Just "<PENDING>" -> error "symbol 'main' not found"
+            Just x           -> pure x
+            _                -> error "no bkpt>addr field"
+        case (hexadecimal mainAddr) of
+            Left err     -> error $ "unable to parse hex address: " ++ err
+            Right (x, _) -> pure x
+    bkpt <- sendCommand "b main" gdb
+    resultClass bkpt @?= Done
+    main <- takeMVar mvar
+    isRight main @? displayException (fromLeft undefined main :: SomeException)
 

@@ -16,6 +16,9 @@ module Mello.Gdb.MI
        , parseGdbOutput
        , parseGdbOutputLine
        , Value(..)
+       , valueToString
+       , valueToTuple
+       , valueToList
        , ResultRecord(..)
        , ResultClass(..)
        , AsyncRecord(..)
@@ -43,6 +46,19 @@ data Value =
   | Tuple (HashMap Text Value)
   | List [(Maybe Text, Value)]
   deriving stock (Show, Eq)
+
+-- Convenience functions, useful in the Maybe monad.
+valueToString :: Value -> Maybe Text
+valueToString (String x) = Just x
+valueToString _          = Nothing
+
+valueToTuple :: Value -> Maybe (HashMap Text Value)
+valueToTuple (Tuple x) = Just x
+valueToTuple _         = Nothing
+
+valueToList :: Value -> Maybe [(Maybe Text, Value)]
+valueToList (List x) = Just x
+valueToList _        = Nothing
 
 data ResultClass =
     Done
