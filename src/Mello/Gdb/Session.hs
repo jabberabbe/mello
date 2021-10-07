@@ -1,4 +1,7 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DeriveDataTypeable  #-}
+{-# LANGUAGE DerivingStrategies  #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {- |
 Copyright: (c) 2021 Tito Sacchi
 SPDX-License-Identifier: GPL-3.0-only
@@ -11,6 +14,7 @@ talk to the debugger with a file descriptor.
 module Mello.Gdb.Session where
 
 import           Control.Concurrent
+import           Control.Exception
 import           Control.Monad
 import           Data.HashMap.Strict   (HashMap)
 import qualified Data.HashMap.Strict   as HM
@@ -20,7 +24,7 @@ import           Data.IORef
 import           Data.Maybe
 import           Data.Text             (Text)
 import qualified Data.Text.IO          as T
-import           Debug.Trace
+import           Data.Typeable
 import           System.IO
 import           System.Mem.Weak
 import           System.Posix.IO
@@ -115,8 +119,22 @@ data GdbHandle = GdbHandle
     -- 'MVar' is full while the manager tries to deliver an asynchronous message,
     -- the manager may block and no other other messages could be delivered until
     -- the 'MVar' becomes free.
-    asyncExecCallback    :: !(IORef (Maybe (MVar AsyncRecord)))
+    asyncExecCallback    :: !(IORef (Maybe (MVar AsyncRecord))),
+    -- | Initialised as empty. Will be filled when the debugger exits (i.e.
+    -- 'readHandle' reaches EOF). Waiting on this 'MVar' can be a strategy to
+    -- configure custom cleanup when the GDB session is closed.
+    closedMVar           :: !(MVar ()),
+    -- | Each of these threads (if still alive) will receive the
+    -- 'GdbSessionClosed' asynchronous exception when GDB exits (i.e. when
+    -- 'closedMVar' becomes full).
+    dependentThreadIds   :: !(IORef [Weak ThreadId])
   }
+
+-- | This exception is thrown when GDB exits. It is delivered synchronously by
+-- 'sendCommand' & friends, and asynchronously by the manager thread (see
+-- 'dependentThreadIds').
+data GdbSessionClosed = GdbSessionClosed deriving stock (Show, Typeable)
+instance Exception GdbSessionClosed
 
 -- | Open a GDB session with the specified configuration.
 spawnGdb :: GdbConfig -> IO GdbHandle
@@ -139,9 +157,8 @@ spawnGdb config@GdbConfig{..} = do
         -- hPutStrLn tmpHdl newUiCommand
         -- hClose tmpHdl
 
-        let gdbCmdLine = showCommandForUser (fromMaybe "gdb" gdbPath) ["-ex", newUiCommand]
-        traceIO $ "Running gdb with cmdline: " ++ gdbCmdLine
-        traceIO $ "On PTY: " ++ ptyName
+        let gdbCmdLine = showCommandForUser (fromMaybe "gdb" gdbPath)
+              (["-ex", newUiCommand] ++ args)
         void $ createProcess $
             (proc consoleCmd (consoleArgs ++ [gdbCmdLine])) {
                std_in = NoStream,
@@ -167,40 +184,62 @@ spawnGdb config@GdbConfig{..} = do
     pendingCommands <- newIORef IM.empty
     asyncExecCallback <- newIORef Nothing
     asyncNotifyCallbacks <- newIORef HM.empty
+    closedMVar <- newEmptyMVar
+    dependentThreadIds <- newIORef []
     managerThread <- forkIO >=> mkWeakThreadId $
-        manage pendingCommands asyncExecCallback asyncNotifyCallbacks readHandle
+        manage pendingCommands asyncExecCallback asyncNotifyCallbacks
+          closedMVar readHandle dependentThreadIds
     return GdbHandle{..}
 
   where
-    manage pendingCommands asyncExecCallback asyncNotifyCallbacks readHandle =
-      forever $ do
-        gdbLine <- T.hGetLine readHandle
-        case (parseGdbOutputLine gdbLine) of
-          -- Parsing failed
-          Left errorMsg -> error errorMsg
+    manage pendingCommands asyncExecCallback asyncNotifyCallbacks closedMVar
+      readHandle dependentThreadIds = do
+        closed <- hIsClosed readHandle
+        eof <- if closed then pure False else hIsEOF readHandle
+        if eof || closed
+        then do
+          when (not closed) $
+            hClose readHandle
+          threadsToKill <- readIORef dependentThreadIds
+          forM_ threadsToKill $ \weak -> do
+              threadId <- deRefWeak weak
+              case threadId of
+                Just t  -> throwTo t GdbSessionClosed
+                Nothing -> pure ()
+          atomicWriteIORef dependentThreadIds []
+          void $ tryPutMVar closedMVar ()
+        else do
+          gdbLine <- T.hGetLine readHandle
+          case (parseGdbOutputLine gdbLine) of
+            -- Parsing failed
+            Left errorMsg -> error errorMsg
 
-          -- If the result has no token, don't do anything with it
-          Right (Just (Result result@ResultRecord{..})) | Just token <- resultToken -> do
-            -- Atomically get and remove the MVar from the queue
-            waitingMVar <- atomicModifyIORef' pendingCommands $
-                (,) <$> IM.delete token <*> IM.lookup token
-            case waitingMVar of
-              Nothing   -> return ()
-              Just mvar -> putMVar mvar result
+            -- If the result has no token, don't do anything with it
+            Right (Just (Result result@ResultRecord{..})) | Just token <- resultToken -> do
+              when (resultClass == Exit) $
+                hClose readHandle
+              -- Atomically get and remove the MVar from the queue
+              waitingMVar <- atomicModifyIORef' pendingCommands $
+                  (,) <$> IM.delete token <*> IM.lookup token
+              case waitingMVar of
+                Nothing   -> return ()
+                Just mvar -> putMVar mvar result
 
-          Right (Just (Async async@AsyncRecord{..}) ) | asyncType == Exec -> do
-            waitingMVar <- readIORef asyncExecCallback
-            case waitingMVar of
-              Nothing   -> return ()
-              Just mvar -> putMVar mvar async
+            Right (Just (Async async@AsyncRecord{..}) ) | asyncType == Exec -> do
+              waitingMVar <- readIORef asyncExecCallback
+              case waitingMVar of
+                Nothing   -> return ()
+                Just mvar -> putMVar mvar async
 
-          Right (Just (Async async@AsyncRecord{..}) ) | asyncType == Notify -> do
-            waitingMVar <- HM.lookup asyncClass <$> readIORef asyncNotifyCallbacks
-            case waitingMVar of
-              Nothing   -> return ()
-              Just mvar -> putMVar mvar async
+            Right (Just (Async async@AsyncRecord{..}) ) | asyncType == Notify -> do
+              waitingMVar <- HM.lookup asyncClass <$> readIORef asyncNotifyCallbacks
+              case waitingMVar of
+                Nothing   -> return ()
+                Just mvar -> putMVar mvar async
 
-          _ -> return ()
+            _ -> return ()
+          manage pendingCommands asyncExecCallback asyncNotifyCallbacks
+            closedMVar readHandle dependentThreadIds
 
 -- | Send an MI command to the GDB session and return an empty 'MVar' that will
 -- be filled with the result.
@@ -211,6 +250,10 @@ sendCommandAsync command gdb = do
     -- Allocate an MVar and put it in the pending queue
     mvar <- newEmptyMVar
     atomicModifyIORef' (pendingCommands gdb) $ (,) <$> IM.insert token mvar <*> const ()
+    -- Check that the GDB session is not closed
+    sessionOpen <- isEmptyMVar (closedMVar gdb)
+    when (not sessionOpen) $
+      throwIO GdbSessionClosed
     -- Send the command (token + command line) on the write end of the pipe
     hPutStr (writeHandle gdb) (show token)
     T.hPutStrLn (writeHandle gdb) command
@@ -233,14 +276,19 @@ sendCommand command = sendCommandAsync command >=> takeMVar
 --
 -- @
 -- -- Your handler is processExecInfo :: AsyncRecord -> IO ()
--- registerAsyncHandler (processExecInfo >>= forkIO) gdbHandle
+-- registerAsyncHandler (processExecInfo >=> forkIO >=> void) gdbHandle
 -- @
+--
+-- The user-supplied handler will receive the 'GdbSessionClosed' asynchronous
+-- exception if GDB exits while the handler is running.
+-- __It should rethrow the exception__ so that the handler thread exits,
+-- unless you really know what you are doing.
 --
 -- The handler thread will probably receive the
 -- 'Control.Exception.BlockedIndefinitelyOnMVar' exception if the handler is
--- replaced with another one (with another call to this function) or if the GDB
--- session dies, but this is not guaranteed by the RTS and it is the user's
--- responsibility to ensure that any required cleanup is performed.
+-- replaced with another one (with another call to this function) but this is
+-- not guaranteed by the RTS and it is the user's responsibility to ensure that
+-- any required cleanup is performed.
 registerAsyncExecHandler
   :: (AsyncRecord -> IO ())    -- ^ Handler (callback function)
   -> GdbHandle                 -- ^ Handle to the GDB session
@@ -248,8 +296,12 @@ registerAsyncExecHandler
 registerAsyncExecHandler handler gdb = do
     mvar <- newEmptyMVar
     atomicWriteIORef (asyncExecCallback gdb) (Just mvar)
-    forkIO >=> mkWeakThreadId $
-      forever $ takeMVar mvar >>= handler
+    handlerThread <- forkIO >=> mkWeakThreadId $
+      -- We want to let the handler catch 'GdbSessionClosed' exceptions and
+      -- terminate the loop when GDB exits.
+      (forever $ takeMVar mvar >>= handler) `catch` (\(_ :: GdbSessionClosed) -> pure ())
+    atomicModifyIORef' (dependentThreadIds gdb) $ (,) <$> (handlerThread:) <*> const ()
+    pure handlerThread
 
 -- | De-register the handler for asynchronous \"exec\" messages, if it exists.
 -- The thread that passed messages to the handler will probably receive a
@@ -274,8 +326,10 @@ registerAsyncNotifyHandler
 registerAsyncNotifyHandler asyncClass handler gdb = do
     mvar <- newEmptyMVar
     atomicModifyIORef' (asyncNotifyCallbacks gdb) $ (,) <$> HM.insert asyncClass mvar <*> const ()
-    forkIO >=> mkWeakThreadId $
-      forever $ takeMVar mvar >>= handler
+    handlerThread <- forkIO >=> mkWeakThreadId $
+      (forever $ takeMVar mvar >>= handler) `catch` (\(_ :: GdbSessionClosed) -> pure ())
+    atomicModifyIORef' (dependentThreadIds gdb) $ (,) <$> (handlerThread:) <*> const ()
+    pure handlerThread
 
 -- | De-register the handler for a specific asynchronous \"notify\" message class.
 -- The thread that passed messages to the handler will probably receive a

@@ -3,9 +3,11 @@
   -Wno-name-shadowing -Wno-incomplete-uni-patterns
   -Wno-type-defaults -Wno-unused-top-binds
 #-}
-{-# LANGUAGE LambdaCase         #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving  #-}
+
 module GdbTests (gdbTests) where
 
 import           Test.Tasty
@@ -20,6 +22,7 @@ import           Control.Monad
 import           Data.Either
 import           Data.HashMap.Strict        as HM
 import           Data.Maybe
+import           Data.Proxy
 import           Data.Text
 import qualified Data.Text.IO               as T
 import           Data.Text.Read
@@ -83,6 +86,12 @@ onDarwin = do
     then pure True
     else pure False
 
+assertThrows :: forall e. Exception e => Proxy e -> IO () -> Assertion
+assertThrows _ x = do
+    throwed <- newEmptyMVar
+    x `catch` (\(_ :: e) -> putMVar throwed ())
+    not <$> isEmptyMVar throwed @? "The supplied IO action did not throw"
+
 gdbInteractionTests :: IO TestTree
 gdbInteractionTests = testGroup "GDB interaction tests"
     <$> ((checkGdbInstalled >> tests) <|> pure [])
@@ -95,6 +104,7 @@ gdbInteractionTests = testGroup "GDB interaction tests"
     tests = pure $
         [ parseMainAddress
         , asyncBkptAdd
+        , gracefullyQuit
         ]
 
 -- Test whether we can successfully retrieve the address for a symbol.  We need
@@ -156,3 +166,23 @@ asyncBkptAdd = testCase "async_bkpt_add" $ do
     main <- takeMVar mvar
     isRight main @? displayException (fromLeft undefined main :: SomeException)
 
+gracefullyQuit :: TestTree
+gracefullyQuit = testCase "gracefully_quit" $ do
+    myPath <- getExecutablePath
+    let config = GdbConfig Nothing Nothing [myPath] []
+    -- let config = GdbConfig Nothing (Just ("tmux", ["splitw", "-h", "-f"])) [myPath] []
+    gdb <- spawnGdb config
+    handlerKilled <- newEmptyMVar
+    emptyMVar <- newEmptyMVar
+    void $ flip (registerAsyncNotifyHandler "breakpoint-created") gdb $ \_ ->
+        -- Simulate a long-running handler by waiting on an empty MVar
+        catch (takeMVar emptyMVar) $
+          (\(e :: GdbSessionClosed) -> putMVar handlerKilled () >> throwIO e)
+    void $ sendCommand "b main" gdb
+    quit <- sendCommand "-gdb-exit" gdb
+    resultClass quit @?= Exit
+    -- Wait until the handle is actually closed
+    () <- readMVar (closedMVar gdb)
+    () <- readMVar handlerKilled
+    assertThrows (Proxy :: Proxy GdbSessionClosed) $
+      void $ sendCommand "-gdb-set $pippo=2" gdb
